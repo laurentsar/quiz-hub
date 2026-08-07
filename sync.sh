@@ -19,4 +19,9 @@ rm -f "$HERE/www/revision/firebase-config.js" \
 # Retire les <script> firebase-* du index.html de la copie publique.
 sed -i '/<script[^>]*firebase-[a-z]*\.js/d' "$HERE/www/revision/index.html"
 
-echo "OK — apps synchronisées (Firebase retiré du bundle public)"
+# Le bandeau « mise à jour disponible » (update-check.js) sert à l'auto-MAJ de
+# l'APK : inutile sur le web. On le retire des deux apps de la copie publique.
+rm -f "$HERE/www/langue/update-check.js" "$HERE/www/revision/update-check.js"
+sed -i '/<script[^>]*update-check\.js/d' "$HERE/www/langue/index.html" "$HERE/www/revision/index.html"
+
+echo "OK — apps synchronisées (Firebase + bandeau MAJ retirés du bundle public)"
