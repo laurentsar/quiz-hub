@@ -56,6 +56,7 @@ const GROUPS = [
   { id: 'ccsp', label: 'Certification CCSP', icon: '☁️', dot: '🟢', color: '#27B3FF', test: (k) => /^ccsp\d+$/.test(k) },
   { id: 'cc', label: 'Certification CC (ISC2)', icon: '🌱', dot: '🟢', color: '#FF9F43', test: (k) => /^cc\d+$/.test(k) },
   { id: 'ceh', label: 'Certification CEH', icon: '🕵️', dot: '🟢', color: '#FF6B81', test: (k) => /^ceh\d+$/.test(k) },
+  { id: 'iso', label: 'Normes ISO', icon: '📏', dot: '🟣', color: '#A855F7', test: (k) => k === 'iso' },
 ];
 function groupOf(k) { return GROUPS.find(g => g.test(k)); }
 function groupById(id) { return GROUPS.find(g => g.id === id); }
@@ -1888,17 +1889,18 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 // ---------- démarrage ----------
 (async function init() {
   const empty = { branches: {}, concepts: [] };
-  const [base, cissp, isc2, ceh, ignite, scen] = await Promise.all([
+  const [base, cissp, isc2, ceh, ignite, iso, scen] = await Promise.all([
     (await fetch('data/secu_concepts.json')).json(),
     (await fetch('data/cissp_concepts.json')).json().catch(() => empty),
     (await fetch('data/isc2_concepts.json')).json().catch(() => empty),
     (await fetch('data/ceh_concepts.json')).json().catch(() => empty),
     (await fetch('data/ignite_concepts.json')).json().catch(() => empty),
+    (await fetch('data/iso_concepts.json')).json().catch(() => empty),
     (await fetch('data/scenarios.json')).json().catch(() => ({})),
   ]);
-  // Chaque source (homologation, CISSP, SSCP/CCSP/CC, CEH, mind maps Ignite) apporte
-  // ses thèmes ; tous sont traités à l'identique par le quiz, les flashcards et le Leitner.
-  const srcs = [base, cissp, isc2, ceh, ignite];
+  // Chaque source (homologation, CISSP, SSCP/CCSP/CC, CEH, mind maps Ignite, normes ISO)
+  // apporte ses thèmes ; tous sont traités à l'identique par le quiz, les flashcards et le Leitner.
+  const srcs = [base, cissp, isc2, ceh, ignite, iso];
   DB = {
     branches: Object.assign({}, ...srcs.map(s => s.branches)),
     concepts: [].concat(...srcs.map(s => s.concepts)),
