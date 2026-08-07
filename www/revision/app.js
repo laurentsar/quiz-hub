@@ -38,7 +38,7 @@ const state = {
   learn: [], lidx: 0,
 };
 
-let DB = null, ALL = [], CATS = [], BYTERM = {};
+let DB = null, ALL = [], CATS = [], BYTERM = {}, BRANCH_VIDEOS = {}, CATEGORY_VIDEOS = {};
 
 // Groupes de thèmes : une chip parent repliée + le détail des membres à la demande.
 // id = identifiant de la chip parent ; test() reconnaît les clés de branche membres.
@@ -56,13 +56,19 @@ const GROUPS = [
   { id: 'ccsp', label: 'Certification CCSP', icon: '☁️', dot: '🟢', color: '#27B3FF', test: (k) => /^ccsp\d+$/.test(k) },
   { id: 'cc', label: 'Certification CC (ISC2)', icon: '🌱', dot: '🟢', color: '#FF9F43', test: (k) => /^cc\d+$/.test(k) },
   { id: 'ceh', label: 'Certification CEH', icon: '🕵️', dot: '🟢', color: '#FF6B81', test: (k) => /^ceh\d+$/.test(k) },
-  { id: 'iso', label: 'Normes ISO', icon: '📏', dot: '🟣', color: '#A855F7', test: (k) => k === 'iso' },
+  { id: 'iso27001', label: 'Certification ISO 27001', icon: '🛡️', dot: '🟣', color: '#A78BFA', test: (k) => k.startsWith('iso27001') },
+  { id: 'iso42001', label: 'Certification ISO 42001 IA', icon: '🤖', dot: '🟢', color: '#6EE7B7', test: (k) => k.startsWith('iso42') },
+  { id: 'ebiosrm', label: 'Méthode EBIOS RM', icon: '🎯', dot: '🔵', color: '#38BDF8', test: (k) => k.startsWith('ebios_') },
+  { id: 'prog', label: 'Programmation', icon: '💻', dot: '🐍', color: '#FFD166', test: (k) => k.startsWith('py') },
 ];
 function groupOf(k) { return GROUPS.find(g => g.test(k)); }
 function groupById(id) { return GROUPS.find(g => g.id === id); }
 function groupKeys(g) { return Object.keys(DB.branches).filter(g.test); }
 function groupActive(g) { return [...state.branches].some(g.test); }
 function branchLabel(k) { return (DB.branches && DB.branches[k]) || k; }
+// Langue du contenu d'un thème : homologation/réglementation/réf. FR sont en français,
+// tout le reste (certifications ISC2/EC-Council) est en anglais (référentiels officiels EN).
+function branchLang(b) { return (b === 'archi' || b === 'igi1300' || b === 'ii901' || b === 'igi2102' || b.startsWith('ig_') || b.startsWith('py') || b.startsWith('iso27001') || b.startsWith('iso42') || b.startsWith('ebios_')) ? 'fr' : 'en'; }
 
 // Libellé de la sélection courante : rien de sélectionné = tout.
 function scopeLabel() {
@@ -474,29 +480,27 @@ function normTxt(s) {
 }
 const CLOZE_BLANK = '_________';
 // Construit une phrase à trous : masque le terme là où il apparaît (exemple
-// prioritaire, sinon définition). Renvoie null si le terme n'apparaît nulle part.
+// prioritaire, sinon définition), avec tolérance pluriel/flexion sur le dernier
+// mot. Renvoie null si le terme n'apparaît nulle part.
 function clozeMask(concept) {
   const term = normTxt(concept.term);
   if (!term) return null;
+  const tw = term.split(' ');
+  const wordMatch = (sw, t, last) => sw === t || (last && sw.length >= 4 && t.length >= 4 && (sw.startsWith(t) || t.startsWith(sw)));
   for (const src of [concept.ex, concept.def]) {
     if (!src) continue;
-    // on cherche le terme dans la version normalisée, puis on masque la portion
-    // correspondante dans la phrase d'origine (même nombre de mots).
     const words = String(src).split(/(\s+)/); // garde les séparateurs
-    const normWords = words.map(normTxt);
-    const termWords = term.split(' ');
-    for (let i = 0; i < normWords.length; i++) {
-      if (normWords[i] !== termWords[0]) continue;
-      let j = i, k = 0;
-      while (k < termWords.length && j < normWords.length) {
-        if (normWords[j] === '') { j++; continue; }       // séparateur
-        if (normWords[j] !== termWords[k]) break;
+    const nw = words.map(normTxt);
+    for (let i = 0; i < nw.length; i++) {
+      if (nw[i] === '') continue;
+      let j = i, k = 0, ok = true;
+      while (k < tw.length) {
+        while (j < nw.length && nw[j] === '') j++;
+        if (j >= nw.length) { ok = false; break; }
+        if (!wordMatch(nw[j], tw[k], k === tw.length - 1)) { ok = false; break; }
         j++; k++;
       }
-      if (k === termWords.length) {
-        const masked = words.slice(0, i).join('') + CLOZE_BLANK + words.slice(j).join('');
-        return masked;
-      }
+      if (ok && k === tw.length) return words.slice(0, i).join('') + CLOZE_BLANK + words.slice(j).join('');
     }
   }
   return null;
@@ -576,16 +580,36 @@ function beep(ok) {
 function vibrate(ok) { try { navigator.vibrate && navigator.vibrate(ok ? 25 : [40, 50, 40]); } catch (e) {} }
 
 // ---------- vues ----------
-const views = { home: $('view-home'), quiz: $('view-quiz'), result: $('view-result'), fiches: $('view-fiches'), learn: $('view-learn'), resources: $('view-resources'), stats: $('view-stats') };
+const views = { home: $('view-home'), quiz: $('view-quiz'), result: $('view-result'), fiches: $('view-fiches'), mindmap: $('view-mindmap'), learn: $('view-learn'), resources: $('view-resources'), stats: $('view-stats') };
 let autoNextTimer = null;
 function showView(name) {
   Object.entries(views).forEach(([k, el]) => el.classList.toggle('hidden', k !== name));
   $('btn-fab-home').classList.toggle('hidden', name === 'home');   // bouton flottant Accueil
+  if (name !== 'quiz' && name !== 'learn' && typeof exitFS === 'function') exitFS();
   window.scrollTo(0, 0);
 }
 function renderChips(sel, current, attr) { document.querySelectorAll(sel).forEach(c => c.classList.toggle('active', c.dataset[attr] === String(current))); }
 
 const BRANCH_COLORS = { archi: '#27B3FF', igi1300: '#8B9BFF', ii901: '#35D07F', igi2102: '#FF9F6B' };
+const MM_BRANCH_PALETTE = {
+  cissp1:'#4C96FF', cissp2:'#4CBFFF', cissp3:'#4CFFE8', cissp4:'#4CFF96',
+  cissp5:'#A0FF4C', cissp6:'#FFD54C', cissp7:'#FF964C', cissp8:'#FF4C6B',
+  archi:'#27B3FF', igi1300:'#8B9BFF', ii901:'#35D07F', igi2102:'#FF9F6B',
+  cc1:'#7C6BFF', cc2:'#6BAAFF', cc3:'#6BFFAA', cc4:'#FFAA6B', cc5:'#FF6BAA',
+  ccsp1:'#B06BFF', ccsp2:'#FF6BD6', ccsp3:'#6BD6FF', ccsp4:'#6BFFB0',
+  ccsp5:'#FFB06B', ccsp6:'#FF6B6B',
+  sscp1:'#6B8AFF', sscp2:'#6BFFDC', sscp3:'#DCFF6B', sscp4:'#FF8A6B',
+  sscp5:'#C06BFF', sscp6:'#6BC0FF', sscp7:'#6BFFC0',
+  ceh1:'#FF4C4C',
+  ig_nist:'#89CFF0', ig_gdpr:'#B8E0FF', ig_iso:'#7EC8E3',
+  ig_ebios:'#5B9BCC', ig_anssi:'#4A90D9', ig_pci:'#2171B5',
+  ig_socialeng:'#FF9F43', py:'#FFD700',
+  iso27001_1:'#A78BFA', iso27001_2:'#818CF8', iso27001_3:'#60A5FA',
+  iso27001_4:'#34D399', iso27001_a:'#F472B6',
+  iso42_1:'#6EE7B7', iso42_2:'#34D399', iso42_3:'#10B981', iso42_a:'#059669',
+  ebios_1:'#38BDF8', ebios_2:'#0EA5E9', ebios_3:'#0284C7', ebios_4:'#0369A1',
+};
+function mmBranchColor(b) { return MM_BRANCH_PALETTE[b] || '#6B8AFF'; }
 function themeColor() {
   const sel = [...state.branches];
   for (const g of GROUPS) if (sel.length && sel.every(g.test)) return g.color;
@@ -745,7 +769,7 @@ function renderQuestion() {
     fb.innerHTML = html;
     fb.className = 'feedback show ' + (a.correct ? 'good' : 'bad');
     const v = fb.querySelector('.fb-video');
-    if (v) v.addEventListener('click', () => openExternal(videoSearchUrl(v.dataset.term)));
+    if (v) v.addEventListener('click', () => openConceptVideo(v.dataset.term));
     const flagBtn = fb.querySelector('.flag-btn');
     if (flagBtn) flagBtn.addEventListener('click', () => openFlagModal(q.key, q.promptLabel));
   } else { fb.innerHTML = ''; fb.className = 'feedback'; startQTimer(); }
@@ -952,57 +976,80 @@ function finishQuiz() {
   if (perfect && total >= 3) launchFireworks();
 }
 
-// ---------- mode Apprendre (flashcards) ----------
-function startLearn() {
-  state.learn = pickConcepts('srs');
-  if (state.count > 0) state.learn = state.learn.slice(0, state.count);
-  if (!state.learn.length) return;
+// ---------- mode Parcours (lecture libre, sans notation) ----------
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function startBrowse() {
+  const pool = branchScopedList();
+  if (!pool.length) return;
+  // Catégories dans un ordre aléatoire, concepts mélangés à l'intérieur de chaque catégorie
+  const bycat = {};
+  for (const c of pool) { (bycat[c.cat || ''] ||= []).push(c); }
+  const sorted = shuffle(Object.values(bycat)).flatMap(g => shuffle(g));
+  state.learn = state.count > 0 ? sorted.slice(0, state.count) : sorted;
+  state.browse = true;
+  state.browseRevealed = false;
   studying = true; pomoStart();
   state.lidx = 0;
   showView('learn'); renderFlash();
+}
+function browsePrev() {
+  if (state.lidx > 0) { state.lidx--; state.browseRevealed = false; renderFlash(); }
+}
+function browseNext() {
+  if (!state.browseRevealed) {
+    // Étape 1 : révéler la définition
+    state.browseRevealed = true;
+    $('flash-back').classList.remove('hidden');
+    $('btn-browse-next').textContent = 'Concept suivant →';
+    const strip = $('learn-kbd-strip');
+    if (strip) strip.innerHTML = '<kbd>←</kbd> précédent <span class="ks">·</span> <kbd>→</kbd> concept suivant <span class="ks">·</span> <kbd>Échap</kbd> quitter';
+  } else {
+    // Étape 2 : passer au concept suivant
+    state.browseRevealed = false;
+    if (state.lidx < state.learn.length - 1) { state.lidx++; renderFlash(); }
+    else { state.browse = false; showView('home'); renderHome(); }
+  }
 }
 function renderFlash() {
   const c = state.learn[state.lidx];
   $('learn-progress').textContent = `Carte ${state.lidx + 1}/${state.learn.length}`;
   $('learn-level').textContent = scopeLabel();
-  $('flash-cat').textContent = c.cat;
+  const catItems = state.learn.filter(x => (x.cat || '') === (c.cat || ''));
+  const catPos = catItems.indexOf(c) + 1;
+  $('flash-cat').textContent = `${c.cat || ''}  ·  ${catPos}/${catItems.length}`;
   $('flash-term').textContent = c.term;
   $('flash-def').textContent = c.def || 'Relève de : ' + c.cat;
   $('flash-tip').textContent = c.tip ? '💡 ' + c.tip : '';
   $('flash-ex').textContent = c.ex ? '🔎 ' + c.ex : '';
+  // Mode parcours : définition masquée, Suivant la révèle puis avance
   $('flash-back').classList.add('hidden');
-  $('btn-flash-reveal').classList.remove('hidden');
-  $('flash-grade').classList.add('hidden');
-}
-function revealFlash() {
-  $('flash-back').classList.remove('hidden');
-  $('btn-flash-reveal').classList.add('hidden');
-  $('flash-grade').classList.remove('hidden');
-}
-function gradeFlash(ok) {
-  srsUpdate(state.learn[state.lidx].term, ok);
-  logDaily(ok);
-  if (state.lidx < state.learn.length - 1) { state.lidx++; renderFlash(); }
-  else { showView('home'); renderHome(); }
+  $('browse-nav').classList.remove('hidden');
+  $('btn-learn-home').classList.add('hidden');
+  $('btn-browse-prev').disabled = state.lidx === 0;
+  $('btn-browse-next').textContent = 'Voir la définition →';
+  const strip = $('learn-kbd-strip');
+  if (strip) strip.innerHTML = '<kbd>←</kbd> précédent <span class="ks">·</span> <kbd>→</kbd> voir définition <span class="ks">·</span> <kbd>Échap</kbd> quitter';
 }
 
 // ---------- fiches (référence, consultables par thème via menu déroulant) ----------
-// Sélection propre aux Fiches, indépendante du quiz : 'all', une clé de branche,
-// ou 'grp:<id>' pour tout un groupe (CISSP, Réf. cyber…).
-let fichesSel = 'all';
+// Le thème sélectionné est partagé avec l'accueil et la Mind Map (state.branches) :
+// le changer ici, à l'accueil ou dans la Mind Map le change partout.
+function branchScopedList() { return state.branches.size ? ALL.filter(c => state.branches.has(c.branch)) : ALL; }
 
 // Peuple le menu déroulant des fiches (mêmes options que l'accueil).
 function renderFichesSelect() {
   const sel = $('fiches-select');
   sel.innerHTML = themeOptionsHtml();
-  sel.value = fichesSel;
+  sel.value = scopeToSelectValue();
 }
 
-function fichesList() {
-  if (fichesSel === 'all') return ALL;
-  if (fichesSel.startsWith('grp:')) { const g = groupById(fichesSel.slice(4)); return ALL.filter(c => g.test(c.branch)); }
-  return ALL.filter(c => c.branch === fichesSel);
-}
+function fichesList() { return branchScopedList(); }
 
 function renderFiches() {
   renderFichesSelect();
@@ -1017,7 +1064,186 @@ function renderFiches() {
       `<a class="fiche-video" data-term="${esc(c.term)}">🎥 Vidéo</a></div>`).join('') +
     `</div>`).join('') || '<div class="card"><div class="mm-source">Aucune fiche.</div></div>';
   $('fiches-content').querySelectorAll('.fiche-video').forEach(a =>
-    a.addEventListener('click', () => openExternal(videoSearchUrl(a.dataset.term))));
+    a.addEventListener('click', () => openConceptVideo(a.dataset.term)));
+}
+
+// ---------- mind map (vision par thème / certification) ----------
+// Reconstruit l'arbre branche -> catégorie -> concept depuis les données déjà en
+// mémoire (ALL) : aucun fetch supplémentaire, disponible hors ligne dès le 1er lancement.
+// Le thème sélectionné est partagé avec l'accueil et les Fiches (state.branches).
+let mmDomain = null, mmQuery = '', mmFilter = 'all';
+const MM_SEARCH_MIN = 2;
+const MM_FILTERS = [
+  { id: 'all',      label: 'Tous' },
+  { id: 'new',      label: 'Nouveaux' },
+  { id: 'progress', label: 'En cours' },
+  { id: 'mastered', label: 'Maîtrisés' },
+];
+
+function mmList() { return branchScopedList(); }
+// Ordre stable des branches présentes, celui de DB.branches (cohérent avec le reste de l'appli).
+function mmBranchesOf(list) {
+  const present = new Set(list.map(c => c.branch));
+  return Object.keys(DB.branches).filter(k => present.has(k));
+}
+// Libellé court d'un domaine : sans préfixe de groupe (« CC · », « SSCP · »…) pour tenir en chip.
+function mmDomainShort(b) { return branchLabel(b).replace(/^[^·]+·\s*/, ''); }
+function mmMastery(list) {
+  const srs = getSrs();
+  const total = list.length;
+  const mastered = list.filter(c => srs[c.term] && srs[c.term].box >= 4).length;
+  return { total, mastered, pct: total ? Math.round(100 * mastered / total) : 0 };
+}
+function mmBoxClass(term, srs) {
+  const e = srs[term];
+  if (e && e.box >= 4) return 'mm-box-mastered';   // vert — maîtrisé
+  if (e && e.box >= 1) return 'mm-box-progress';    // orange — à moitié
+  return 'mm-box-new';                              // blanc — le reste
+}
+function mmHighlight(text, q) {
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return esc(text);
+  return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length));
+}
+
+function renderMindmapSelect() {
+  const sel = $('mm-select');
+  sel.innerHTML = themeOptionsHtml();
+  sel.value = scopeToSelectValue();
+}
+
+// Anneau de progression (maîtrise Leitner) au centre de la mind map : motive à
+// continuer, cohérent avec le tableau de bord de l'accueil.
+function renderMindmapHub(list) {
+  const m = mmMastery(list);
+  $('mm-hub-ring').style.background = `conic-gradient(var(--sky) ${m.pct * 3.6}deg, rgba(255,255,255,0.12) 0deg)`;
+  $('mm-hub-pct').textContent = m.pct + '%';
+  $('mm-hub-title').textContent = scopeLabel();
+  $('mm-hub-sub').textContent = `${m.mastered} / ${m.total} concepts maîtrisés`;
+}
+
+function renderMindmapDomains() { $('mm-domains').innerHTML = ''; }
+
+function mmBoxNum(term, srs) {
+  const e = srs[term];
+  return e ? `<span class="mm-box-lbl mm-box-lbl-${Math.min(e.box, 5)}" title="Boîte Leitner ${e.box}">${e.box}</span>` : '';
+}
+function mmTermBody(c, srs) {
+  return `<div class="mm-term-body">` +
+    `<p class="mm-term-def">${esc(c.def || 'Relève de : ' + c.cat)}</p>` +
+    (c.tip ? `<p class="mm-term-tip">💡 ${esc(c.tip)}</p>` : '') +
+    (c.ex ? `<p class="mm-term-ex">🔎 ${esc(c.ex)}</p>` : '') +
+    (c.confuse && c.confuse.length ? `<p class="mm-term-confuse">⚠️ À ne pas confondre : ${c.confuse.map(t => `<em>${esc(t)}</em>`).join(', ')}</p>` : '') +
+    `<div class="mm-term-footer"><a class="fiche-video" data-term="${esc(c.term)}">🎥 Vidéo</a></div>` +
+    `</div>`;
+}
+function mmTermHtml(c, srs) {
+  return `<details class="mm-term ${mmBoxClass(c.term, srs)}"><summary><span class="mm-term-row"><span class="mm-dot"></span><span class="mm-term-label">${esc(c.term)}</span>${mmBoxNum(c.term, srs)}</span></summary>${mmTermBody(c, srs)}</details>`;
+}
+function mmHitHtml(c, srs) {
+  return `<details class="mm-term ${mmBoxClass(c.term, srs)}"><summary><span class="mm-term-row"><span class="mm-dot"></span><span class="mm-term-label">${mmHighlight(c.term, mmQuery)}</span>${mmBoxNum(c.term, srs)}</span><span class="mm-hit-crumb">${esc(mmDomainShort(c.branch))} › ${esc(c.cat)}</span></summary>${mmTermBody(c, srs)}</details>`;
+}
+
+function renderMindmapFilters() {
+  const el = $('mm-filters');
+  if (!el) return;
+  el.innerHTML = MM_FILTERS.map(f =>
+    `<button class="chip mm-filter-chip${mmFilter === f.id ? ' active' : ''}" data-mmf="${f.id}">${f.label}</button>`
+  ).join('');
+  el.querySelectorAll('[data-mmf]').forEach(btn => btn.addEventListener('click', () => {
+    mmFilter = btn.dataset.mmf;
+    renderMindmapFilters(); renderMindmapBody();
+  }));
+}
+
+function mmFilteredList(list, srs) {
+  if (mmFilter === 'all') return list;
+  return list.filter(c => {
+    const e = srs[c.term];
+    if (mmFilter === 'mastered') return e && e.box >= 4;
+    if (mmFilter === 'progress') return e && e.box >= 1 && e.box < 4;
+    return !e || e.box < 1; // 'new'
+  });
+}
+
+function renderMindmapTree(list, srs) {
+  const branchOrder = Object.keys(DB.branches).filter(k => list.some(c => c.branch === k));
+  if (!branchOrder.length) return '<div class="card"><p class="mm-hit-p">Aucun concept.</p></div>';
+
+  // Group: branch → { cat → [concepts] }
+  const byBranch = {};
+  list.forEach(c => {
+    if (!byBranch[c.branch]) byBranch[c.branch] = {};
+    (byBranch[c.branch][c.cat] = byBranch[c.branch][c.cat] || []).push(c);
+  });
+
+  return branchOrder.map(branch => {
+    const cats = byBranch[branch];
+    if (!cats) return '';
+    const color = mmBranchColor(branch);
+    const allTerms = Object.values(cats).flat();
+    const masteredN = allTerms.filter(c => srs[c.term] && srs[c.term].box >= 4).length;
+    const pct = allTerms.length ? Math.round(100 * masteredN / allTerms.length) : 0;
+    const autoOpen = branchOrder.length === 1 || allTerms.length <= 25;
+
+    const catsHtml = Object.keys(cats).map(cat => {
+      const concepts = cats[cat];
+      const catM = concepts.filter(c => srs[c.term] && srs[c.term].box >= 4).length;
+      const catPct = concepts.length ? Math.round(100 * catM / concepts.length) : 0;
+      return `<details class="mm-tree-cat">` +
+        `<summary class="mm-tree-cat-sum">` +
+        `<span class="mm-tree-cat-name">${esc(cat)}</span>` +
+        `<span class="mm-count">${catM}/${concepts.length}</span>` +
+        `<span class="mm-tree-cat-bar"><span class="mm-tree-cat-bar-fill" style="width:${catPct}%;background:${color}"></span></span>` +
+        `</summary>` +
+        `<div class="mm-tree-terms">${concepts.map(c => mmTermHtml(c, srs)).join('')}</div>` +
+        `</details>`;
+    }).join('');
+
+    return `<details class="mm-tree-branch" style="--bc:${color}" ${autoOpen ? 'open' : ''}>` +
+      `<summary class="mm-tree-branch-sum">` +
+      `<span class="mm-tree-branch-arr"></span>` +
+      `<span class="mm-tree-branch-dot"></span>` +
+      `<span class="mm-tree-branch-name">${esc(branchLabel(branch))}</span>` +
+      `<span class="mm-count">${masteredN}/${allTerms.length}</span>` +
+      `</summary>` +
+      `<div class="mm-tree-branch-prog"><div class="mm-tree-branch-prog-fill" style="width:${pct}%;background:${color}"></div></div>` +
+      `<div class="mm-tree-cats">${catsHtml}</div>` +
+      `</details>`;
+  }).join('');
+}
+
+function renderMindmapBody() {
+  const list = mmList();
+  const box = $('mm-content');
+  const srs = getSrs();
+  if (mmQuery.length >= MM_SEARCH_MIN) {
+    const needle = mmQuery.toLowerCase();
+    const raw = list.filter(c => c.term.toLowerCase().includes(needle) || c.cat.toLowerCase().includes(needle));
+    const hits = mmFilteredList(raw, srs);
+    $('mm-crumb').textContent = hits.length + ' résultat' + (hits.length > 1 ? 's' : '');
+    box.innerHTML = hits.length
+      ? `<div class="card mm-terms">${hits.slice(0, 150).map(c => mmHitHtml(c, srs)).join('')}</div>`
+      : '<div class="card"><p class="mm-hit-p">Aucun résultat</p></div>';
+  } else {
+    const filtered = mmFilteredList(list, srs);
+    $('mm-crumb').textContent = filtered.length + ' concept' + (filtered.length > 1 ? 's' : '');
+    box.innerHTML = `<div class="mm-tree">${renderMindmapTree(filtered, srs)}</div>`;
+  }
+  box.querySelectorAll('.fiche-video').forEach(a => a.addEventListener('click', () => openConceptVideo(a.dataset.term)));
+}
+
+function renderMindmap() {
+  renderMindmapSelect();
+  const list = mmList();
+  renderMindmapHub(list);
+  renderMindmapDomains();
+  renderMindmapFilters();
+  renderMindmapBody();
+}
+function openMindmap() {
+  mmQuery = ''; mmFilter = 'all'; const s = $('mm-search'); if (s) s.value = '';
+  showView('mindmap'); renderMindmap();
 }
 
 // ---------- ressources (podcasts / vidéos) ----------
@@ -1061,10 +1287,31 @@ function openExternal(url) {
   } catch (e) {}
   window.open(url, '_blank', 'noopener');
 }
-// Recherche vidéo YouTube (résultats français) pour un concept.
+// Requête vidéo adaptée à la langue/contexte du concept : un terme de certification
+// (contenu EN) cherche en anglais avec le nom de la certif en contexte (« AIC triad
+// CISSP explained » >> « AIC triad cybersécurité », hors sujet en FR) ; un concept
+// francophone (homologation, réglementation, réf. cyber) garde la recherche FR.
 function videoSearchUrl(term) {
+  const c = BYTERM[term];
   const q = term.replace(/\([^)]*\)/g, '').trim();
+  if (c && branchLang(c.branch) === 'en') {
+    const g = groupOf(c.branch);
+    const ctx = g ? g.label.replace(/^Certification\s+/, '') : '';
+    return 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q + (ctx ? ' ' + ctx : '') + ' explained') + '&hl=en&gl=US';
+  }
   return 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q + ' cybersécurité');
+}
+
+// Vidéo de référence choisie à la main (data/category_videos.json, data/branch_videos.json),
+// même principe que quiz-langue (video Url/title curés, pas de recherche live ni de
+// clé API). Priorité : vidéo de la catégorie précise du concept > vidéo du domaine
+// entier > recherche YouTube externe (si rien n'est encore curé pour ce concept).
+function openConceptVideo(term) {
+  const c = BYTERM[term];
+  const catVideo = c && CATEGORY_VIDEOS[c.branch] && CATEGORY_VIDEOS[c.branch][c.cat];
+  const branchVideo = c && BRANCH_VIDEOS[c.branch];
+  const curated = catVideo || branchVideo;
+  openExternal(curated ? curated.url : videoSearchUrl(term));
 }
 
 function renderResources() {
@@ -1671,22 +1918,19 @@ $('btn-next').addEventListener('click', goNext);
 $('btn-abort').addEventListener('click', exitToHome);
 $('btn-replay').addEventListener('click', () => startSession(state.mode));
 $('btn-home').addEventListener('click', exitToHome);
-$('btn-learn').addEventListener('click', startLearn);
-$('btn-flash-reveal').addEventListener('click', revealFlash);
-$('btn-flash-ok').addEventListener('click', () => gradeFlash(true));
-$('btn-flash-again').addEventListener('click', () => gradeFlash(false));
+$('btn-browse').addEventListener('click', startBrowse);
+$('btn-browse-prev').addEventListener('click', browsePrev);
+$('btn-browse-next').addEventListener('click', browseNext);
 $('btn-learn-home').addEventListener('click', exitToHome);
-$('btn-fiches').addEventListener('click', () => {
-  // pré-sélectionne le thème du quiz : une branche unique, un groupe entier, sinon Tout
-  const sel = [...state.branches];
-  if (sel.length === 1) fichesSel = sel[0];
-  else { const g = sel.length && GROUPS.find(gr => sel.every(gr.test) && sel.length === Object.keys(DB.branches).filter(gr.test).length); fichesSel = g ? 'grp:' + g.id : 'all'; }
-  renderFiches(); showView('fiches');
-});
-$('fiches-select').addEventListener('change', (e) => { fichesSel = e.target.value; renderFiches(); window.scrollTo(0, 0); });
+$('btn-fiches').addEventListener('click', () => { renderFiches(); showView('fiches'); });
+$('fiches-select').addEventListener('change', (e) => { selectHomeTheme(e.target.value); renderFiches(); window.scrollTo(0, 0); });
 $('btn-fiches-home').addEventListener('click', exitToHome);
 $('btn-resources').addEventListener('click', () => { renderResources(); showView('resources'); });
 $('btn-resources-home').addEventListener('click', exitToHome);
+$('btn-mindmap').addEventListener('click', openMindmap);
+$('btn-mindmap-home').addEventListener('click', exitToHome);
+$('mm-select').addEventListener('change', (e) => { selectHomeTheme(e.target.value); mmDomain = null; mmQuery = ''; $('mm-search').value = ''; renderMindmap(); window.scrollTo(0, 0); });
+$('mm-search').addEventListener('input', (e) => { mmQuery = e.target.value.trim(); renderMindmapDomains(mmList()); renderMindmapBody(); });
 
 const optExam = $('opt-exammode');
 optExam.addEventListener('change', () => { state.examMode = optExam.checked; });
@@ -1886,21 +2130,84 @@ $('btn-reset').addEventListener('click', () => {
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
+// ---------- mode révision plein écran ----------
+let fsActive = false;
+
+function enterFS() {
+  fsActive = true;
+  document.body.classList.add('fs');
+  const el = document.documentElement;
+  try { (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el); } catch (_) {}
+  updateFSButtons();
+}
+function exitFS() {
+  if (!fsActive) return;
+  fsActive = false;
+  document.body.classList.remove('fs');
+  try { if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document); } catch (_) {}
+  updateFSButtons();
+}
+function toggleFS() { fsActive ? exitFS() : enterFS(); }
+function updateFSButtons() {
+  const icon = fsActive ? '⤡' : '⤢';
+  ['btn-fs-quiz', 'btn-fs-learn'].forEach(id => { const b = $(id); if (b) b.textContent = icon; });
+}
+
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && fsActive) exitFS(); });
+document.addEventListener('webkitfullscreenchange', () => { if (!document.webkitFullscreenElement && fsActive) exitFS(); });
+
+$('btn-fs-quiz').addEventListener('click', toggleFS);
+$('btn-fs-learn').addEventListener('click', toggleFS);
+
+// Raccourcis clavier
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+
+  // Quiz QCM
+  if (!$('view-quiz').classList.contains('hidden')) {
+    const idx = 'abcd'.indexOf(e.key.toLowerCase());
+    if (idx >= 0) {
+      const opts = $('quiz-options').querySelectorAll('.option:not([disabled])');
+      if (opts[idx]) { e.preventDefault(); opts[idx].click(); }
+      return;
+    }
+    if (e.key === 'Enter' && !$('btn-next').disabled) { e.preventDefault(); $('btn-next').click(); return; }
+    if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFS(); return; }
+    if (e.key === 'Escape' && fsActive) { exitFS(); return; }
+  }
+
+  // Parcours
+  if (!$('view-learn').classList.contains('hidden')) {
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); browsePrev(); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); browseNext(); return; }
+    if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFS(); return; }
+    if (e.key === 'Escape' && fsActive) { exitFS(); return; }
+  }
+});
+
 // ---------- démarrage ----------
 (async function init() {
   const empty = { branches: {}, concepts: [] };
-  const [base, cissp, isc2, ceh, ignite, iso, scen] = await Promise.all([
+  const [base, cissp, isc2, ceh, ignite, prog, iso27001, iso42001, ebiosrm, scen, branchVideos, categoryVideos] = await Promise.all([
     (await fetch('data/secu_concepts.json')).json(),
     (await fetch('data/cissp_concepts.json')).json().catch(() => empty),
     (await fetch('data/isc2_concepts.json')).json().catch(() => empty),
     (await fetch('data/ceh_concepts.json')).json().catch(() => empty),
     (await fetch('data/ignite_concepts.json')).json().catch(() => empty),
-    (await fetch('data/iso_concepts.json')).json().catch(() => empty),
+    (await fetch('data/prog_concepts.json')).json().catch(() => empty),
+    (await fetch('data/iso27001_concepts.json')).json().catch(() => empty),
+    (await fetch('data/iso42001_concepts.json')).json().catch(() => empty),
+    (await fetch('data/ebiosrm_concepts.json')).json().catch(() => empty),
     (await fetch('data/scenarios.json')).json().catch(() => ({})),
+    (await fetch('data/branch_videos.json')).json().catch(() => ({})),
+    (await fetch('data/category_videos.json')).json().catch(() => ({})),
   ]);
-  // Chaque source (homologation, CISSP, SSCP/CCSP/CC, CEH, mind maps Ignite, normes ISO)
-  // apporte ses thèmes ; tous sont traités à l'identique par le quiz, les flashcards et le Leitner.
-  const srcs = [base, cissp, isc2, ceh, ignite, iso];
+  BRANCH_VIDEOS = branchVideos;
+  CATEGORY_VIDEOS = categoryVideos;
+  // Chaque source (homologation, CISSP, SSCP/CCSP/CC, CEH, mind maps Ignite, langages
+  // de programmation) apporte ses thèmes ; tous sont traités à l'identique par le
+  // quiz, les flashcards et le Leitner.
+  const srcs = [base, cissp, isc2, ceh, ignite, prog, iso27001, iso42001, ebiosrm];
   DB = {
     branches: Object.assign({}, ...srcs.map(s => s.branches)),
     concepts: [].concat(...srcs.map(s => s.concepts)),
@@ -1921,7 +2228,6 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
   // doté d'un `ex` débloque la question de mise en situation. On n'applique un
   // scénario que si sa langue correspond à celle du thème — un thème français
   // (homologation, Réf. cyber) ne reçoit pas un scénario anglais, et inversement.
-  const branchLang = (b) => (b === 'archi' || b === 'igi1300' || b === 'ii901' || b === 'igi2102' || b.startsWith('ig_')) ? 'fr' : 'en';
   ALL.forEach(c => {
     const s = scen[normEx(c.term)];
     if (!c.ex && s && s.lang === branchLang(c.branch)) c.ex = s.ex;
