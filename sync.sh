@@ -8,4 +8,15 @@ REVISION="${2:-$HOME/quiz-thales/www}"
 
 rsync -a --delete "$LANGUE/"   "$HERE/www/langue/"
 rsync -a --delete "$REVISION/" "$HERE/www/revision/"
-echo "OK — apps synchronisées dans www/langue et www/revision"
+
+# SÉCURITÉ : cette page est publique. On retire la config Firebase de CyberRévision
+# (clé Web + URL de la Realtime Database) et le module de défi multijoueur, qui n'ont
+# rien à faire sur une page publique. Le défi reste disponible dans l'APK.
+rm -f "$HERE/www/revision/firebase-config.js" \
+      "$HERE/www/revision/firebase-challenge.js" \
+      "$HERE/www/revision/firebase-app-compat.js" \
+      "$HERE/www/revision/firebase-database-compat.js"
+# Retire les <script> firebase-* du index.html de la copie publique.
+sed -i '/<script[^>]*firebase-[a-z]*\.js/d' "$HERE/www/revision/index.html"
+
+echo "OK — apps synchronisées (Firebase retiré du bundle public)"
