@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#061525" />
+  <!-- installation PWA sur iOS (Safari → Partager → Sur l'écran d'accueil) -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CyberRévision" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>CyberRévision</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="img/icon-192.png" />
+  <link rel="apple-touch-icon" href="img/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-blob blob-one"></div>
+  <div class="bg-blob blob-two"></div>
+
+  <main id="app">
+    <!-- HOME -->
+    <section id="view-home" class="view">
+      <div class="home-head">
+        <div>
+          <h1 class="title">CyberRévision</h1>
+          <p class="subtitle">Cybersécurité &amp; homologation — questions générées à la volée</p>
+          <p class="subtitle" id="home-version" style="font-size:12px;opacity:.7"></p>
+        </div>
+        <button id="btn-settings" class="gear" title="Réglages">⚙️</button>
+      </div>
+
+      <div class="top-actions">
+        <button id="btn-learn" class="secondary">🎓 Apprendre (cartes)</button>
+        <button id="btn-cloze" class="secondary">🧩 Texte à trous</button>
+        <button id="btn-review" class="secondary">⟳ Mes erreurs (<span id="review-count">0</span>)</button>
+        <button id="btn-stats" class="secondary">📊 Stats</button>
+        <button id="btn-fiches" class="secondary">📑 Fiches</button>
+        <button id="btn-challenge" class="secondary top-wide">⚔️ Défi multijoueur</button>
+        <button id="btn-resources" class="secondary top-wide">🎧 Podcasts &amp; vidéos</button>
+        <button id="btn-flags" class="secondary top-wide">🚩 Signalements <span id="flag-badge" class="flag-badge hidden"></span></button>
+        <button id="btn-audit" class="secondary top-wide">🔬 Audit qualité</button>
+      </div>
+
+      <div class="card hero">
+        <span class="hero-label">Thème</span>
+        <select id="home-select" class="select"></select>
+
+        <span class="hero-label">Questions</span>
+        <div class="chip-row">
+          <button class="chip count-chip" data-count="5">5</button>
+          <button class="chip count-chip" data-count="10">10</button>
+          <button class="chip count-chip" data-count="20">20</button>
+          <button class="chip count-chip" data-count="0">Tout</button>
+        </div>
+
+        <details class="adv">
+          <summary>Options avancées</summary>
+          <span class="hero-label">Type de question</span>
+          <div class="chip-row">
+            <button class="chip qtype-chip" data-qtype="mix">Mélange</button>
+            <button class="chip qtype-chip" data-qtype="def">Terme → définition</button>
+            <button class="chip qtype-chip" data-qtype="term">Définition → terme</button>
+            <button class="chip qtype-chip" data-qtype="situation">Mise en situation</button>
+            <button class="chip qtype-chip" data-qtype="cloze">🧩 Texte à trous</button>
+            <button class="chip qtype-chip" data-qtype="cat">Catégorie</button>
+          </div>
+          <label class="toggle adv-toggle">
+            <span>🎓 Mode examen (chrono session · 50 % mises en situation)</span>
+            <input type="checkbox" id="opt-exammode" />
+          </label>
+          <button id="btn-concepts" class="secondary" style="margin-top:4px">
+            Gérer les concepts <span id="concept-badge" class="concept-badge"></span>
+          </button>
+        </details>
+      </div>
+
+      <!-- Tableau de bord de progression globale -->
+      <div id="progress-dashboard" class="card progress-dashboard">
+        <div class="dash-top">
+          <div class="dash-stat">
+            <span id="dash-streak" class="dash-streak-val">🔥 0</span>
+            <span class="dash-label">jours consécutifs</span>
+          </div>
+          <div class="dash-stat">
+            <span id="dash-seen-global" class="dash-seen-val">0</span>
+            <span class="dash-label">concepts étudiés</span>
+          </div>
+          <div class="dash-stat">
+            <span id="dash-mastered-global" class="dash-mastered-val">0</span>
+            <span class="dash-label">maîtrisés</span>
+          </div>
+        </div>
+        <div class="dash-track">
+          <div id="dash-fill" class="dash-fill" style="width:0%"></div>
+        </div>
+        <p id="dash-label" class="dash-pct-label">0 % maîtrisé — tous thèmes</p>
+
+        <div class="goal-block">
+          <p id="goal-msg" class="goal-msg">Objectif du jour · <span id="goal-today">0</span>/<span id="goal-target">10</span> questions</p>
+          <div class="dash-track goal-track">
+            <div id="goal-fill" class="dash-fill goal-fill" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card meta">
+        <div class="meta-row"><span class="meta-label">Concepts dans ce thème</span><span id="stat-pool" class="meta-value">—</span></div>
+        <div class="meta-row"><span class="meta-label">Concepts étudiés (thème)</span><span id="stat-seen" class="meta-value">—</span></div>
+        <div class="meta-row"><span class="meta-label">Concepts maîtrisés (thème)</span><span id="stat-mastered" class="meta-value">—</span></div>
+        <div class="meta-row"><span class="meta-label">À revoir aujourd'hui</span><span id="stat-due" class="meta-value">—</span></div>
+        <div class="meta-row"><span class="meta-label">Dernier score</span><span id="stat-last" class="meta-value">—</span></div>
+        <div class="meta-row"><span class="meta-label">Meilleur score</span><span id="stat-best" class="meta-value">—</span></div>
+        <div class="meta-row"><span class="meta-label">Quiz terminés · précision</span><span id="stat-total" class="meta-value">0 · —</span></div>
+      </div>
+
+      <button id="btn-start" class="primary">Démarrer la révision</button>
+    </section>
+
+    <!-- SETTINGS (modal) -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <span>⚙️ Réglages</span>
+          <button id="settings-close" class="gear">✕</button>
+        </div>
+        <label class="toggle"><span>⏭️ Question suivante automatique</span><input type="checkbox" id="opt-autonext" /></label>
+        <label class="toggle"><span>🎵 Son juste / faux</span><input type="checkbox" id="opt-sound" /></label>
+        <label class="toggle"><span>🎯 Distracteurs proches (plus difficile)</span><input type="checkbox" id="opt-close" /></label>
+        <label class="toggle"><span>⏱️ Minuteur 30 s par question</span><input type="checkbox" id="opt-timer" /></label>
+        <label class="toggle"><span>🍅 Pauses Pomodoro (25 min → 5 min)</span><input type="checkbox" id="opt-pomodoro" /></label>
+        <label class="toggle"><span>🔢 Afficher le nombre de concepts par thème</span><input type="checkbox" id="opt-counts" /></label>
+
+        <div class="setting-row" style="margin-top:14px">
+          <span class="setting-label">🎯 Objectif quotidien</span>
+          <div class="chip-row">
+            <button class="chip goal-chip" data-goal="5">5</button>
+            <button class="chip goal-chip" data-goal="10">10</button>
+            <button class="chip goal-chip" data-goal="20">20</button>
+            <button class="chip goal-chip" data-goal="30">30</button>
+          </div>
+        </div>
+
+        <div class="meta-row" style="margin-top:14px">
+          <span class="meta-label">Pseudo (défis)</span>
+          <input id="pseudo-input" class="pseudo-input" type="text" maxlength="20" placeholder="MonPseudo" autocomplete="off" />
+        </div>
+
+        <div class="meta-row">
+          <span class="meta-label">Version installée</span>
+          <span id="app-version" class="meta-value">—</span>
+        </div>
+        <button id="btn-check-update" class="ghost">🔄 Vérifier les mises à jour</button>
+
+        <div class="meta-row" style="display:block;margin-top:14px">
+          <span class="meta-label">💾 Sauvegarde de la progression</span>
+          <p class="muted" style="font-size:13px;margin:6px 0">Ta progression Leitner vit sur ce
+          téléphone : désinstaller l'app l'efface. Renseigne Home Assistant et la sauvegarde
+          devient automatique.</p>
+          <div id="backup-panel"></div>
+        </div>
+        <p id="update-status" class="mm-source"></p>
+
+        <button id="btn-reset" class="ghost">🗑️ Réinitialiser mes stats &amp; erreurs</button>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <section id="view-stats" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">📊 Statistiques</span>
+        <span id="stats-scope" class="quiz-level"></span>
+      </div>
+
+      <div id="stats-summary" class="card stats-tiles"></div>
+
+      <div class="card chart-card">
+        <span class="chart-title">Activité — 14 derniers jours</span>
+        <canvas id="chart-activity" class="chart"></canvas>
+        <span class="chart-legend">Barres = questions répondues par jour</span>
+      </div>
+
+      <div class="card chart-card">
+        <span class="chart-title">Maîtrise par boîte Leitner</span>
+        <canvas id="chart-boxes" class="chart"></canvas>
+        <span class="chart-legend">Boîte 0 = à revoir · 4–5 = maîtrisé</span>
+      </div>
+
+      <div class="card chart-card">
+        <span class="chart-title">Par thème — vus / maîtrisés</span>
+        <canvas id="chart-branches" class="chart"></canvas>
+        <span class="chart-legend"><i class="dot sky"></i> Vus &nbsp; <i class="dot green"></i> Maîtrisés</span>
+      </div>
+
+      <div class="card chart-card">
+        <span class="chart-title">⚠️ Concepts les plus difficiles</span>
+        <div id="weak-concepts" class="weak-concepts-list"></div>
+      </div>
+
+      <button id="btn-stats-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- APPRENDRE (flashcards + répétition espacée) -->
+    <section id="view-learn" class="view hidden">
+      <div class="quiz-header">
+        <span id="learn-progress" class="quiz-progress">Carte 1/1</span>
+        <span id="learn-level" class="quiz-level"></span>
+      </div>
+
+      <div class="card flash-card">
+        <span class="flash-cat" id="flash-cat"></span>
+        <span class="flash-term" id="flash-term"></span>
+        <div id="flash-back" class="flash-back hidden">
+          <p class="flash-def" id="flash-def"></p>
+          <p class="flash-tip" id="flash-tip"></p>
+          <p class="flash-ex" id="flash-ex"></p>
+        </div>
+      </div>
+
+      <button id="btn-flash-reveal" class="primary">Afficher la réponse</button>
+      <div id="flash-grade" class="quiz-footer hidden">
+        <button id="btn-flash-again" class="ghost grow">🔁 À revoir</button>
+        <button id="btn-flash-ok" class="primary grow">✅ Je savais</button>
+      </div>
+      <button id="btn-learn-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- FICHES (référence) -->
+    <section id="view-fiches" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">📑 Fiches de révision</span>
+      </div>
+      <span class="hero-label">Consulter un thème</span>
+      <select id="fiches-select" class="select"></select>
+      <div id="fiches-content"></div>
+      <button id="btn-fiches-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- RESSOURCES (podcasts & vidéos) -->
+    <section id="view-resources" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">🎧 Podcasts &amp; vidéos</span>
+      </div>
+      <div id="resources-content"></div>
+      <p class="mm-source">Liens externes ouverts dans le navigateur. Sélection francophone en priorité.</p>
+      <button id="btn-resources-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- QUIZ -->
+    <section id="view-quiz" class="view hidden">
+      <div class="quiz-header">
+        <span id="quiz-progress" class="quiz-progress">Question 1/10</span>
+        <span id="quiz-timer" class="quiz-timer"></span>
+        <span id="quiz-level" class="quiz-level"></span>
+      </div>
+      <div class="progress"><div id="quiz-bar" class="progress-bar"></div></div>
+
+      <div class="card word-card">
+        <span id="quiz-prompt-label" class="word-label">Question</span>
+        <div class="word-line">
+          <span id="quiz-word" class="word-value sentence"></span>
+        </div>
+      </div>
+
+      <div id="quiz-options" class="options"></div>
+
+      <div class="feedback-area"><span id="quiz-feedback" class="feedback"></span></div>
+
+      <div class="quiz-footer sticky">
+        <button id="btn-abort" class="ghost">Quitter</button>
+        <button id="btn-next" class="primary grow" disabled>Suivant</button>
+      </div>
+    </section>
+
+    <!-- RESULT -->
+    <section id="view-result" class="view hidden">
+      <h1 class="title">Résultat</h1>
+      <p id="result-sub" class="subtitle">Quiz terminé</p>
+
+      <div class="card result-card">
+        <span id="result-score" class="result-score">0/10</span>
+        <span class="result-label">Bonnes réponses</span>
+      </div>
+
+      <div id="result-wrong" class="card wrong-card"></div>
+
+      <div id="challenge-result" class="card challenge-result-card hidden">
+        <span class="challenge-result-label">⚔️ Code du défi</span>
+        <span id="challenge-result-code" class="challenge-result-code"></span>
+        <button id="btn-share-result" class="ghost">📤 Partager mon score</button>
+      </div>
+
+      <div id="challenge-leaderboard" class="card hidden">
+        <span class="leaderboard-title">🏆 Classement en direct</span>
+        <div id="leaderboard-rows"></div>
+        <p id="leaderboard-status" class="mm-source"></p>
+      </div>
+
+      <button id="btn-replay" class="primary">Nouvelle révision</button>
+      <button id="btn-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- GESTIONNAIRE DE CONCEPTS (modal) -->
+    <div id="concept-modal" class="modal hidden">
+      <div class="modal-card concept-modal-card">
+        <div class="modal-head">
+          <span>Concepts actifs</span>
+          <button id="concept-modal-close" class="gear">✕</button>
+        </div>
+        <input id="concept-search" class="search-input" type="search" placeholder="Rechercher un concept…" autocomplete="off" />
+        <div class="concept-actions">
+          <button id="btn-enable-all" class="chip">Tout activer</button>
+          <button id="btn-disable-branch" class="chip">Désactiver le thème sélectionné</button>
+        </div>
+        <span id="concept-count" class="concept-count"></span>
+        <div id="concept-list" class="concept-list"></div>
+      </div>
+    </div>
+
+    <!-- DÉFI MULTIJOUEUR (modal) -->
+    <div id="challenge-modal" class="modal hidden">
+      <div class="modal-card challenge-modal-card">
+        <div class="modal-head">
+          <span>⚔️ Défi multijoueur</span>
+          <button id="challenge-modal-close" class="gear">✕</button>
+        </div>
+
+        <!-- Créer un défi -->
+        <p class="challenge-section-title">Créer un défi</p>
+        <span class="hero-label">Thème</span>
+        <select id="challenge-theme-select" class="select" style="margin-bottom:8px"></select>
+
+        <div class="challenge-params-row">
+          <div class="challenge-param">
+            <span class="hero-label">Questions</span>
+            <select id="challenge-count-select" class="select-sm">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="20">20</option>
+              <option value="0">Toutes</option>
+            </select>
+          </div>
+          <div class="challenge-param">
+            <span class="hero-label">Fréquence</span>
+            <select id="challenge-freq-select" class="select-sm">
+              <option value="0" selected>Une seule fois</option>
+              <option value="1">Quotidien</option>
+              <option value="3">Tous les 3 jours</option>
+              <option value="7">Hebdomadaire</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Durée estimée (défi unique) -->
+        <div id="challenge-quick-duration-row" class="challenge-params-row" style="margin-top:4px">
+          <div class="challenge-param">
+            <span class="hero-label">Durée estimée</span>
+            <span id="challenge-duration" class="challenge-duration-badge">≈ 8 min</span>
+          </div>
+        </div>
+
+        <!-- Durée totale (campagne) -->
+        <div id="challenge-campaign-duration-row" class="challenge-params-row hidden" style="margin-top:4px">
+          <div class="challenge-param">
+            <span class="hero-label">Durée totale</span>
+            <select id="challenge-duration-select" class="select-sm">
+              <option value="7">1 semaine</option>
+              <option value="14">2 semaines</option>
+              <option value="30" selected>1 mois</option>
+              <option value="90">3 mois</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Défi rapide -->
+        <div id="challenge-quick-section">
+          <div class="challenge-code-box">
+            <span id="challenge-code" class="challenge-code">——————</span>
+          </div>
+          <p id="challenge-scope-info" class="challenge-info"></p>
+          <div class="challenge-share-row">
+            <button id="btn-copy-code" class="chip">📋 Copier le code</button>
+            <button id="btn-whatsapp-code" class="btn-whatsapp">&#128172; WhatsApp</button>
+          </div>
+          <button id="btn-start-my-challenge" class="primary" style="margin-top:10px">▶ Jouer ce défi</button>
+        </div>
+
+        <!-- Campagne (fréquence > 0) -->
+        <div id="challenge-campaign-section" class="hidden">
+          <p id="challenge-campaign-preview" class="campaign-preview-text"></p>
+          <p id="challenge-fb-warning" class="challenge-error hidden">Firebase requis pour les campagnes — vérifiez votre connexion.</p>
+          <div id="challenge-create-row">
+            <button id="btn-create-campaign" class="primary" style="margin-top:10px">🚀 Créer la campagne</button>
+          </div>
+          <div id="challenge-created-section" class="hidden">
+            <div class="challenge-code-box">
+              <span id="campaign-code" class="challenge-code campaign-code-small">XXXX-XXXX</span>
+            </div>
+            <p id="campaign-created-info" class="challenge-info"></p>
+            <div class="challenge-share-row">
+              <button id="btn-copy-campaign-code" class="chip">📋 Copier</button>
+              <button id="btn-whatsapp-campaign" class="btn-whatsapp">&#128172; WhatsApp</button>
+            </div>
+            <button id="btn-start-campaign-round" class="primary" style="margin-top:10px">▶ Jouer la session 1</button>
+            <button id="btn-campaign-new" class="ghost-sm" style="margin-top:8px; display:block; width:100%; text-align:center">← Nouveau défi</button>
+            <button id="btn-delete-campaign" class="ghost-sm" style="margin-top:4px; display:block; width:100%; text-align:center; color:#e55;">🗑 Supprimer cette campagne</button>
+          </div>
+        </div>
+
+        <div class="modal-sep"></div>
+
+        <!-- Rejoindre -->
+        <p class="challenge-section-title">Rejoindre un défi</p>
+        <p class="mm-source">Entre un code reçu (défi rapide ou campagne).</p>
+        <input id="challenge-code-input" class="search-input" type="text" placeholder="Ex : A3F9B-2C14E ou ABCD-EF12" autocomplete="off" maxlength="12" style="margin-bottom:8px" />
+
+        <!-- Info campagne (après lookup) -->
+        <div id="campaign-join-info" class="campaign-join-info hidden">
+          <div class="campaign-round-row">
+            <span id="cji-theme" class="campaign-round-theme"></span>
+            <span id="cji-progress" class="campaign-round-progress"></span>
+          </div>
+          <p id="cji-next" class="campaign-round-next"></p>
+          <button id="btn-play-campaign-round" class="primary" style="margin-top:6px">▶ Jouer</button>
+        </div>
+
+        <button id="btn-join-challenge" class="primary">Rejoindre</button>
+        <p id="challenge-error" class="challenge-error hidden">Code invalide. Vérifie la saisie.</p>
+
+      </div>
+    </div>
+
+    <!-- AUDIT QUALITÉ -->
+    <div id="audit-modal" class="modal hidden">
+      <div class="modal-card audit-modal-card">
+        <div class="modal-head">
+          <span>🔬 Audit qualité</span>
+          <button id="audit-modal-close" class="gear">✕</button>
+        </div>
+        <div id="audit-summary" class="card stats-tiles" style="padding:12px"></div>
+        <span class="hero-label">Filtrer par thème</span>
+        <select id="audit-branch-select" class="select"></select>
+        <div id="audit-preview" class="audit-preview"></div>
+        <button id="audit-export-btn" class="primary">📋 Copier l'export pour Claude</button>
+        <p class="mm-source">Colle l'export dans une conversation Claude pour obtenir les définitions et exemples manquants, puis reviens dans Signalements pour les appliquer.</p>
+      </div>
+    </div>
+
+    <!-- SIGNALEMENT D'UNE QUESTION -->
+    <div id="flag-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <span>🚩 Signaler la question</span>
+          <button id="flag-modal-close" class="gear">✕</button>
+        </div>
+        <p id="flag-concept-label" class="flag-concept-label"></p>
+        <span class="hero-label">Problème constaté</span>
+        <div class="chip-row" style="flex-wrap:wrap;gap:8px">
+          <button class="chip flag-type-chip" data-type="floue">📝 Formulation floue</button>
+          <button class="chip flag-type-chip" data-type="rep">❌ Mauvaise réponse</button>
+          <button class="chip flag-type-chip" data-type="ex">🔎 Exemple trompeur</button>
+          <button class="chip flag-type-chip" data-type="autre">💬 Autre</button>
+        </div>
+        <textarea id="flag-note" class="flag-note-input" rows="3" placeholder="Préciser le problème (optionnel)…"></textarea>
+        <button id="btn-flag-submit" class="primary">Signaler</button>
+      </div>
+    </div>
+
+    <!-- GESTIONNAIRE DE SIGNALEMENTS -->
+    <div id="flags-modal" class="modal hidden">
+      <div class="modal-card flags-modal-card">
+        <div class="modal-head">
+          <span>🚩 Signalements (<span id="flags-open-count">0</span>)</span>
+          <button id="flags-modal-close" class="gear">✕</button>
+        </div>
+        <p class="mm-source">Corrige la formulation, sauvegarde, puis marque comme résolu.</p>
+        <div id="flags-list"></div>
+      </div>
+    </div>
+
+    <!-- PAUSE POMODORO -->
+    <div id="pomodoro-modal" class="modal hidden">
+      <div class="modal-card pomo-card">
+        <div class="pomo-emoji">🍅</div>
+        <h2 class="pomo-title">Pause Pomodoro</h2>
+        <p class="pomo-sub">25 min de révision active — le cerveau consolide mieux avec une vraie pause. Lève-toi, respire, hydrate-toi.</p>
+        <div id="pomo-countdown" class="pomo-count">5:00</div>
+        <button id="btn-pomo-resume" class="primary">Reprendre maintenant</button>
+      </div>
+    </div>
+  </main>
+
+  <button id="btn-fab-home" class="fab-home hidden" title="Accueil">🏠</button>
+
+  <!-- Firebase SDK (facultatif : classements de défis en temps réel) -->
+  <script src="firebase-config.js" defer></script>
+  <script src="firebase-challenge.js" defer></script>
+
+  <!-- avant app.js : celui-ci lit APP_VERSION au chargement (affichage de la version) -->
+  <script>window.UPDATE_REPO='laurentsar/quiz-revision';window.APP_VERSION='5.19';</script>
+  <script src="app.js"></script>
+  <script src="update-check.js" defer></script>
+  <script>window.BACKUP_APP = 'quiz-revision';</script>
+  <script src="autobackup.js"></script>
+  <script>AutoBackup.mount(document.getElementById('backup-panel'));</script>
+</body>
+</html>

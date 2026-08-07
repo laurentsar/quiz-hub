@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#061525" />
+  <title>VocaLang</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="img/icon-192.png" />
+  <link rel="apple-touch-icon" href="img/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Filet de diagnostic : affiche toute erreur JS non capturée au lieu de
+    // laisser l'écran figé en silence (bannière tapable pour copier le texte).
+    window.addEventListener('error', function (e) {
+      try {
+        var b = document.getElementById('js-error-banner') || document.createElement('div');
+        b.id = 'js-error-banner';
+        b.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:100000;background:#7f1d1d;color:#fff;padding:10px 12px;border-radius:10px;font:12px/1.4 system-ui;white-space:pre-wrap;box-shadow:0 4px 16px rgba(0,0,0,.4)';
+        b.textContent = '⚠️ ' + (e.message || e.error) + '\n' + (e.filename || '').split('/').pop() + ':' + e.lineno;
+        b.onclick = function () { b.remove(); };
+        (document.body || document.documentElement).appendChild(b);
+      } catch (_) {}
+    });
+  </script>
+</head>
+<body>
+  <div class="bg-blob blob-one"></div>
+  <div class="bg-blob blob-two"></div>
+
+  <main id="app">
+    <!-- HOME -->
+    <section id="view-home" class="view">
+      <div class="home-head">
+        <div>
+          <h1 class="title">VocaLang</h1>
+          <p class="subtitle">Vocabulaire avec révision intelligente</p>
+          <p id="app-version" class="app-version"></p>
+        </div>
+        <button id="btn-settings" class="gear" title="Réglages">⚙️</button>
+      </div>
+
+      <!-- Widget motivation -->
+      <div id="motivation-bar" class="card motiv-bar">
+        <div class="motiv-streak">
+          <span id="motiv-flame">🔥</span>
+          <span id="motiv-streak-count">0</span>
+          <span class="motiv-label">jour(s)</span>
+        </div>
+        <div class="motiv-goal">
+          <div class="motiv-goal-text"><span id="motiv-today">0</span>/<span id="motiv-target">10</span> aujourd'hui</div>
+          <div class="motiv-progress-track"><div id="motiv-progress-bar" class="motiv-progress-fill"></div></div>
+        </div>
+      </div>
+
+      <!-- Actions principales -->
+      <div class="top-actions">
+        <button id="btn-learn" class="secondary">🎓 Apprendre (cartes)</button>
+        <button id="btn-review" class="secondary">⟳ Mes erreurs (<span id="review-count">0</span>)</button>
+        <button id="btn-stats" class="secondary">📊 Stats</button>
+        <button id="btn-phrases" class="secondary">🧩 Phrases à compléter</button>
+      </div>
+
+      <!-- Accordéon modules -->
+      <button id="btn-toggle-modules" class="modules-toggle">
+        <span>📚 Modules</span>
+        <span id="modules-arrow" class="modules-arrow">▾</span>
+      </button>
+      <div id="modules-panel" class="modules-panel hidden">
+        <div class="modules-group">
+          <span class="modules-group-label">Grammaire &amp; Lexique</span>
+          <div class="modules-grid">
+            <button id="btn-verbs" class="mod-btn">📘 Verbes irréguliers</button>
+            <button id="btn-grammar" class="mod-btn">📖 Grammaire</button>
+            <button id="btn-faux-amis" class="mod-btn">⚠️ Faux amis</button>
+            <button id="btn-familles" class="mod-btn">🔤 Familles de mots</button>
+            <button id="btn-cognates" class="mod-btn">✅ Vrais cognates</button>
+            <button id="btn-tenses" class="mod-btn">⏱️ Temps verbaux</button>
+          </div>
+        </div>
+        <div class="modules-group">
+          <span class="modules-group-label">Compétences</span>
+          <div class="modules-grid">
+            <button id="btn-listen" class="mod-btn">🎧 Écoute</button>
+            <button id="btn-pronun" class="mod-btn">🎤 Prononciation</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card hero">
+        <span class="hero-label">Langue</span>
+        <div class="chip-row">
+          <button class="chip lang-chip" data-lang="en">🇬🇧 Anglais</button>
+          <button class="chip lang-chip" data-lang="es">🇪🇸 Espagnol</button>
+        </div>
+        <button id="btn-magazine" class="mag-launch" type="button">📖 <b>Vocable</b><span class="mag-sub">Magazine · Cafeyn</span><span class="mag-go">▸</span></button>
+
+        <span class="hero-label">Sens</span>
+        <div class="chip-row">
+          <button class="chip dir-chip" data-dir="fwd">Mot → Français</button>
+          <button class="chip dir-chip" data-dir="rev">Français → Mot</button>
+        </div>
+
+        <span class="hero-label">Niveau</span>
+        <div id="level-row" class="chip-row"></div>
+        <div class="concept-selall">
+          <button id="btn-level-all" class="ghost-sm">Tout sélectionner</button>
+          <button id="btn-level-none" class="ghost-sm">Tout désélectionner</button>
+        </div>
+
+        <span class="hero-label">Questions</span>
+        <div class="chip-row">
+          <button class="chip count-chip" data-count="5">5</button>
+          <button class="chip count-chip" data-count="10">10</button>
+          <button class="chip count-chip" data-count="20">20</button>
+        </div>
+      </div>
+
+      <div class="card meta">
+        <div class="meta-row"><span class="meta-label">Score précédent</span><span id="stat-last" class="meta-value">0/5</span></div>
+        <div class="meta-row"><span class="meta-label">Quiz terminés · Points</span><span id="stat-total" class="meta-value">0 · 0</span></div>
+        <div class="meta-row"><span class="meta-label">Série parfaite · record</span><span id="stat-streak" class="meta-value">0 · 0</span></div>
+        <div class="meta-divider"></div>
+        <div class="meta-row"><span class="meta-label">Mots vus / dispo</span><span id="stat-seen" class="meta-value">—</span></div>
+        <div class="meta-row"><span class="meta-label">Mots maîtrisés</span><span id="stat-mastered" class="meta-value">—</span></div>
+        <div class="meta-row"><span class="meta-label">À revoir maintenant</span><span id="stat-due" class="meta-value">—</span></div>
+      </div>
+
+      <button id="btn-start" class="primary">Démarrer la révision</button>
+    </section>
+
+    <!-- SETTINGS (modal) -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <span>⚙️ Réglages</span>
+          <button id="settings-close" class="gear">✕</button>
+        </div>
+        <label class="toggle"><span>🔊 Lire le mot automatiquement</span><input type="checkbox" id="opt-audio" /></label>
+        <label class="toggle"><span>⏭️ Question suivante automatique</span><input type="checkbox" id="opt-autonext" /></label>
+        <label class="toggle"><span>🎵 Son juste / faux</span><input type="checkbox" id="opt-sound" /></label>
+        <label class="toggle"><span>🎯 Distracteurs proches (plus difficile)</span><input type="checkbox" id="opt-close" /></label>
+        <label class="toggle"><span>🔔 Rappels de révision</span><input type="checkbox" id="opt-notifications" /></label>
+        <div class="setting-row">
+          <span class="setting-label">🎯 Objectif quotidien</span>
+          <div class="chip-row">
+            <button class="chip goalcount-chip" data-count="5">5</button>
+            <button class="chip goalcount-chip" data-count="10">10</button>
+            <button class="chip goalcount-chip" data-count="20">20</button>
+            <button class="chip goalcount-chip" data-count="30">30</button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">🕗 Heure du rappel</span>
+          <div class="chip-row">
+            <button class="chip notifhour-chip" data-hour="8">8h</button>
+            <button class="chip notifhour-chip" data-hour="12">12h</button>
+            <button class="chip notifhour-chip" data-hour="19">19h</button>
+            <button class="chip notifhour-chip" data-hour="21">21h</button>
+          </div>
+        </div>
+        <div class="setting-row" style="display:block">
+          <span class="setting-label">💾 Sauvegarde de la progression</span>
+          <p class="muted" style="font-size:13px;margin:6px 0">Ta progression SRS vit sur ce
+          téléphone : désinstaller l'app l'efface. Renseigne Home Assistant et la sauvegarde
+          devient automatique.</p>
+          <div id="backup-panel"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <section id="view-stats" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">📊 Statistiques</span>
+        <span id="stats-lang" class="quiz-level"></span>
+      </div>
+
+      <div class="chip-row">
+        <button class="chip slang-chip" data-lang="en">🇬🇧 Anglais</button>
+        <button class="chip slang-chip" data-lang="es">🇪🇸 Espagnol</button>
+      </div>
+
+      <div id="stats-summary" class="card stats-tiles"></div>
+
+      <div class="card chart-card">
+        <span class="chart-title">Activité — 14 derniers jours</span>
+        <canvas id="chart-activity" class="chart"></canvas>
+        <span class="chart-legend">Barres = questions répondues par jour</span>
+      </div>
+
+      <div class="card chart-card">
+        <span class="chart-title">Maîtrise par boîte SRS</span>
+        <canvas id="chart-boxes" class="chart"></canvas>
+        <span class="chart-legend">Boîte 0 = à revoir · 4–5 = maîtrisé</span>
+      </div>
+
+      <div class="card chart-card">
+        <span class="chart-title">Par niveau — vus / maîtrisés</span>
+        <canvas id="chart-levels" class="chart"></canvas>
+        <span class="chart-legend"><i class="dot sky"></i> Vus &nbsp; <i class="dot green"></i> Maîtrisés</span>
+      </div>
+
+      <button id="btn-stats-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- VERBES IRRÉGULIERS (menu dédié) -->
+    <section id="view-verbs" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">📘 Verbes irréguliers</span>
+        <span class="quiz-level">🇬🇧 Anglais</span>
+      </div>
+
+      <div class="card hero">
+        <span class="hero-label">Forme testée</span>
+        <div class="chip-row">
+          <button class="chip vform-chip" data-vform="pret">Prétérit</button>
+          <button class="chip vform-chip" data-vform="pp">Participe passé</button>
+          <button class="chip vform-chip" data-vform="mix">Mélange</button>
+        </div>
+
+        <span class="hero-label">Questions</span>
+        <div class="chip-row">
+          <button class="chip vcount-chip" data-count="5">5</button>
+          <button class="chip vcount-chip" data-count="10">10</button>
+          <button class="chip vcount-chip" data-count="20">20</button>
+        </div>
+      </div>
+
+      <div id="verbs-summary" class="card stats-tiles"></div>
+
+      <!-- Panel sélection de verbes pour quiz personnalisé -->
+      <div id="verbs-select-panel" class="card ai-panel hidden">
+        <span class="hero-label">Verbes à réviser</span>
+        <div id="verbs-select-list" class="concept-list"></div>
+        <div class="concept-selall">
+          <button id="btn-vsel-all" class="ghost-sm">Tout sélectionner</button>
+          <button id="btn-vsel-none" class="ghost-sm">Tout désélectionner</button>
+        </div>
+        <button id="btn-verbs-custom" class="primary">🎯 Lancer le quiz</button>
+      </div>
+
+      <button id="btn-toggle-vsel" class="secondary">🎯 Quiz personnalisé — choisir les verbes</button>
+      <button id="btn-verbs-start" class="secondary">Démarrer (révision SRS)</button>
+      <button id="btn-verbs-learn" class="secondary">🎓 Apprendre (cartes)</button>
+      <button id="btn-verbs-review" class="secondary">⟳ Mes erreurs (<span id="verbs-review-count">0</span>)</button>
+      <button id="btn-verbs-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- GRAMMAIRE (menu dédié, contenu explicatif) -->
+    <section id="view-grammar" class="view hidden">
+      <div class="quiz-header">
+        <span id="grammar-title" class="quiz-progress">📖 Grammaire</span>
+        <span id="grammar-crumb" class="quiz-level">Sommaire</span>
+      </div>
+      <div id="grammar-lang-chips" class="chip-row">
+        <button class="chip glang-chip active" data-lang="en">🇬🇧 Anglais</button>
+        <button class="chip glang-chip" data-lang="es">🇪🇸 Espagnol</button>
+      </div>
+      <div id="grammar-list" class="grammar-list"></div>
+
+      <!-- Panel sélection de concepts pour quiz personnalisé -->
+      <div id="grammar-ai-panel" class="card ai-panel hidden">
+        <span class="hero-label">Concepts à réviser</span>
+        <div id="grammar-concepts" class="concept-list"></div>
+        <div class="concept-selall">
+          <button id="btn-sel-all" class="ghost-sm">Tout sélectionner</button>
+          <button id="btn-sel-none" class="ghost-sm">Tout désélectionner</button>
+        </div>
+        <span class="hero-label">Nombre de questions</span>
+        <div class="chip-row">
+          <button class="chip gcount-chip active" data-count="5">5</button>
+          <button class="chip gcount-chip" data-count="10">10</button>
+          <button class="chip gcount-chip" data-count="20">20</button>
+        </div>
+        <button id="btn-grammar-ai" class="primary">🎯 Lancer le quiz</button>
+      </div>
+
+      <button id="btn-toggle-ai" class="secondary">🎯 Quiz personnalisé — choisir les concepts</button>
+      <button id="btn-grammar-quiz" class="secondary">🧩 S'entraîner (exercices classiques)</button>
+      <button id="btn-grammar-learn" class="secondary">🎓 Apprendre (cartes)</button>
+      <div id="grammar-detail" class="hidden"></div>
+      <button id="btn-grammar-back" class="secondary hidden">← Sommaire</button>
+      <button id="btn-grammar-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- APPRENDRE (flashcards, branché sur le SRS) -->
+    <section id="view-learn" class="view hidden">
+      <div class="quiz-header">
+        <span id="learn-progress" class="quiz-progress">Carte 1/1</span>
+        <span id="learn-badge" class="quiz-level"></span>
+      </div>
+
+      <div class="card flash-card">
+        <span id="flash-label" class="word-label">Mot</span>
+        <div class="word-line">
+          <span id="flash-front" class="word-value"></span>
+          <button id="btn-flash-speak" class="speak-btn" title="Écouter">🔊</button>
+        </div>
+        <span id="flash-ipa" class="word-ipa"></span>
+        <div id="flash-back" class="flash-back hidden"></div>
+      </div>
+
+      <button id="btn-flash-reveal" class="primary">Afficher la réponse</button>
+      <div id="flash-grade" class="quiz-footer hidden">
+        <button id="btn-flash-again" class="ghost grow">🔁 À revoir</button>
+        <button id="btn-flash-ok" class="primary grow">✅ Je savais</button>
+      </div>
+      <button id="btn-learn-abort" class="secondary">Quitter</button>
+    </section>
+
+    <!-- ÉCOUTE (podcasts par accent) -->
+    <section id="view-listen" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">🎧 Écoute — accents</span>
+        <span id="listen-lang" class="quiz-level"></span>
+      </div>
+      <div class="chip-row">
+        <button class="chip slang2-chip" data-lang="en">🇬🇧 Anglais</button>
+        <button class="chip slang2-chip" data-lang="es">🇪🇸 Espagnol</button>
+      </div>
+      <div id="listen-accents" class="chip-row"></div>
+      <div id="listen-episodes" class="listen-list"></div>
+      <button id="btn-listen-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- PRONONCIATION -->
+    <section id="view-pronun" class="view hidden">
+      <div class="quiz-header">
+        <span id="pronun-progress" class="quiz-progress">Mot 1/10</span>
+        <span class="quiz-level pronun-badge">🎤 Prononciation</span>
+      </div>
+      <div class="progress"><div id="pronun-bar" class="progress-bar pronun-bar"></div></div>
+
+      <div class="card word-card">
+        <span class="word-label">Prononce ce mot</span>
+        <div class="word-line">
+          <span id="pronun-word" class="word-value"></span>
+          <button id="btn-pronun-speak" class="speak-btn" title="Écouter">🔊</button>
+        </div>
+        <span id="pronun-ipa" class="word-ipa"></span>
+        <span id="pronun-translation" class="pronun-translation"></span>
+      </div>
+
+      <div class="pronun-mic-area">
+        <button id="btn-pronun-mic" class="mic-btn">🎤</button>
+        <span id="pronun-mic-hint" class="pronun-hint">Appuie pour parler</span>
+      </div>
+
+      <div id="pronun-feedback" class="feedback hidden"></div>
+
+      <div id="pronun-recognized" class="pronun-recognized hidden">
+        <span class="pronun-heard-label">Reconnu :</span>
+        <span id="pronun-heard-text"></span>
+      </div>
+
+      <div class="quiz-footer">
+        <button id="btn-pronun-abort" class="ghost">Quitter</button>
+        <button id="btn-pronun-next" class="primary grow" disabled>Suivant</button>
+      </div>
+    </section>
+
+    <!-- QUIZ -->
+    <section id="view-quiz" class="view hidden">
+      <div class="quiz-header">
+        <span id="quiz-progress" class="quiz-progress">Question 1/5</span>
+        <span id="quiz-level" class="quiz-level"></span>
+      </div>
+      <div class="progress"><div id="quiz-bar" class="progress-bar"></div></div>
+
+      <div class="card word-card">
+<span id="quiz-prompt-label" class="word-label">Mot</span>
+        <div class="word-line">
+          <span id="quiz-word" class="word-value"></span>
+          <button id="btn-speak" class="speak-btn" title="Écouter">🔊</button>
+        </div>
+        <span id="quiz-ipa" class="word-ipa"></span>
+      </div>
+
+      <div id="quiz-options" class="options"></div>
+
+      <div class="feedback-area"><span id="quiz-feedback" class="feedback"></span></div>
+
+      <div class="quiz-footer">
+        <button id="btn-abort" class="ghost">Quitter</button>
+        <button id="btn-next" class="primary grow" disabled>Suivant</button>
+      </div>
+    </section>
+
+    <!-- RESULT -->
+    <section id="view-result" class="view hidden">
+      <h1 class="title">Résultat</h1>
+      <p id="result-sub" class="subtitle">Quiz terminé</p>
+
+      <div class="card result-card">
+        <span id="result-score" class="result-score">0/5</span>
+        <span class="result-label">Bonnes réponses</span>
+      </div>
+
+      <div id="result-wrong" class="card wrong-card"></div>
+
+      <button id="btn-replay" class="primary">Nouvelle révision</button>
+      <button id="btn-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- FAUX AMIS -->
+    <section id="view-faux-amis" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">⚠️ Faux amis</span>
+        <span class="quiz-level">🇬🇧 Anglais</span>
+      </div>
+      <div class="card hero">
+        <span class="hero-label">Questions</span>
+        <div class="chip-row">
+          <button class="chip facount-chip" data-count="5">5</button>
+          <button class="chip facount-chip" data-count="10">10</button>
+          <button class="chip facount-chip" data-count="20">20</button>
+        </div>
+      </div>
+      <div id="faux-amis-list" class="grammar-list"></div>
+      <div id="faux-amis-detail" class="hidden"></div>
+      <button id="btn-faux-amis-quiz" class="secondary">🧩 Quiz faux amis</button>
+      <button id="btn-faux-amis-back" class="secondary hidden">← Liste</button>
+      <button id="btn-faux-amis-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- FAMILLES DE MOTS -->
+    <section id="view-familles" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">🔤 Familles de mots</span>
+        <span class="quiz-level">🇬🇧 Anglais</span>
+      </div>
+      <div class="card hero">
+        <span class="hero-label">Questions</span>
+        <div class="chip-row">
+          <button class="chip famcount-chip" data-count="5">5</button>
+          <button class="chip famcount-chip" data-count="10">10</button>
+          <button class="chip famcount-chip" data-count="20">20</button>
+        </div>
+      </div>
+      <div id="familles-list" class="grammar-list"></div>
+      <div id="familles-detail" class="hidden"></div>
+      <button id="btn-familles-quiz" class="secondary">🧩 Quiz familles</button>
+      <button id="btn-familles-back" class="secondary hidden">← Liste</button>
+      <button id="btn-familles-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- VRAIS COGNATES -->
+    <section id="view-cognates" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">✅ Vrais cognates</span>
+        <span class="quiz-level">🇬🇧 Anglais</span>
+      </div>
+      <div class="card hero">
+        <span class="hero-label">Questions</span>
+        <div class="chip-row">
+          <button class="chip cogcount-chip" data-count="5">5</button>
+          <button class="chip cogcount-chip" data-count="10">10</button>
+          <button class="chip cogcount-chip" data-count="20">20</button>
+        </div>
+      </div>
+      <div id="cognates-list" class="grammar-list"></div>
+      <div id="cognates-detail" class="hidden"></div>
+      <button id="btn-cognates-quiz" class="secondary">🧩 Quiz cognates</button>
+      <button id="btn-cognates-back" class="secondary hidden">← Liste</button>
+      <button id="btn-cognates-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- TEMPS VERBAUX -->
+    <section id="view-tenses" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">⏱️ Temps verbaux</span>
+        <span class="quiz-level">🇬🇧 Anglais</span>
+      </div>
+      <div class="chip-row">
+        <button class="chip tcount-chip" data-count="5">5</button>
+        <button class="chip tcount-chip" data-count="10">10</button>
+        <button class="chip tcount-chip" data-count="20">20</button>
+      </div>
+      <div id="tenses-list" class="grammar-list"></div>
+      <button id="btn-tenses-quiz" class="primary">▶ Tous les temps (révision)</button>
+      <button id="btn-tenses-home" class="secondary">Accueil</button>
+    </section>
+
+    <!-- PHRASES À COMPLÉTER -->
+    <section id="view-phrases" class="view hidden">
+      <div class="quiz-header">
+        <span class="quiz-progress">🧩 Phrases à compléter</span>
+        <span class="quiz-level">Mix tous concepts</span>
+      </div>
+      <div class="card hero">
+        <span class="hero-label">Questions</span>
+        <div class="chip-row">
+          <button class="chip pcount-chip" data-count="5">5</button>
+          <button class="chip pcount-chip" data-count="10">10</button>
+          <button class="chip pcount-chip" data-count="20">20</button>
+        </div>
+        <p class="phrases-desc">Pioche dans tous les modes : grammaire, temps verbaux, faux amis, familles de mots et cognates.</p>
+      </div>
+      <button id="btn-phrases-start" class="primary">Démarrer</button>
+      <button id="btn-phrases-home" class="secondary">Accueil</button>
+    </section>
+  </main>
+
+  <button id="btn-fab-home" class="fab-home hidden" title="Accueil">🏠</button>
+  <script src="app.js"></script>
+  <script>window.UPDATE_REPO='laurentsar/quiz-langue';window.APP_VERSION='2.34';</script>
+  <script src="update-check.js" defer></script>
+  <script>window.BACKUP_APP = 'quiz-langue';</script>
+  <script src="autobackup.js"></script>
+  <script>AutoBackup.mount(document.getElementById('backup-panel'));</script>
+</body>
+</html>

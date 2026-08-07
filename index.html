@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#061525">
+  <title>Mes Quiz</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="langue/img/icon-192.png">
+  <link rel="apple-touch-icon" href="langue/img/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="hub">
+    <header class="hub-head">
+      <h1>Mes Quiz</h1>
+      <p class="hub-sub">Deux applications de révision — aucune connexion requise.</p>
+    </header>
+
+    <div class="cards">
+      <a class="app-card app-langue" href="langue/index.html">
+        <img class="app-icon" src="langue/img/icon-192.png" alt="">
+        <div class="app-text">
+          <span class="app-title">🗣️ VocaLang</span>
+          <span class="app-desc">Vocabulaire anglais &amp; espagnol, grammaire, verbes — révision intelligente (SRS).</span>
+        </div>
+        <span class="app-go">▸</span>
+      </a>
+
+      <a class="app-card app-revision" href="revision/index.html">
+        <img class="app-icon" src="revision/img/icon-192.png" alt="">
+        <div class="app-text">
+          <span class="app-title">🛡️ CyberRévision</span>
+          <span class="app-desc">Cybersécurité &amp; homologation, certifications — questions générées à la volée.</span>
+        </div>
+        <span class="app-go">▸</span>
+      </a>
+    </div>
+
+    <footer class="hub-foot">
+      <p>Chaque app fonctionne hors ligne et enregistre ta progression sur cet appareil.</p>
+    </footer>
+  </main>
+
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  </script>
+</body>
+</html>
