@@ -1,0 +1,23 @@
+name: Publish web hub to GitHub Pages
+
+# Publie le dossier www/ (portail + les deux applis) sur la branche gh-pages.
+# Même principe que GestHôte : page publique, aucune authentification.
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish www/ to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./www

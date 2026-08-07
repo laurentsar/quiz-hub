@@ -1,0 +1,12 @@
+{
+  "name": "Mes Quiz",
+  "short_name": "Mes Quiz",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#061525",
+  "theme_color": "#061525",
+  "icons": [
+    { "src": "langue/img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "langue/img/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
